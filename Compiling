@@ -1,6 +1,0 @@
-Compiling Code From Linux
-# Windows
-i686-w64-mingw32-gcc source.c -lws2_32 -o out.exe
-
-# Linux
-gcc -m32|-m64 -o output source.c
